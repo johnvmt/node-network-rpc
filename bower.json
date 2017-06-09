@@ -1,0 +1,17 @@
+{
+  "name": "node-network-rpc",
+  "version": "0.0.1",
+  "description": "Create an RPC system over Node Network",
+  "authors": [
+    "John Murphy-Teixidor <johnvmt@gmail.com>"
+  ],
+  "license": "MIT",
+  "main": "./src/NodeNetworkRpc.js",
+  "keywords": [],
+  "ignore": [
+    "**/.*",
+    "bower_components"
+  ],
+  "dependencies": {
+  }
+}

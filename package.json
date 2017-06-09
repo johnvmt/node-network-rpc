@@ -1,0 +1,28 @@
+{
+  "name": "node-network-rpc",
+  "version": "0.0.1",
+  "description": "Create an RPC system over Node Network",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/johnvmt/node-network-rpc.git"
+  },
+  "author": {
+    "name": "John Murphy-Teixidor",
+    "email": "johnvmt@gmail.com"
+  },
+  "dependencies": {
+    "node-network": "0.1.x",
+    "agnostic-rpc":"0.0.x",
+    "agnostic-router": "0.1.x",
+    "wolfy87-eventemitter": "5.1.x"
+  },
+  "devDependencies": {
+    "browserify": "11.2.x",
+    "minifyify": "7.3.x"
+  },
+  "scripts": {
+    "prepublish": "node ./browserify.js"
+  },
+  "main": "./src/NodeNetworkRpc.js",
+  "license": "MIT"
+}
