@@ -7,6 +7,7 @@ var Utils = require('./Utils.js');
 function NodeNetworkRpc(config) {
 	var rpc = this;
 
+	// TODO seperate configs
 	rpc.network = NodeNetwork(config);
 	rpc.router = AgnosticRouter();
 	rpc._rpc = Rpc();
@@ -123,7 +124,7 @@ NodeNetworkRpc.prototype._rpcMessage = function(rpcMessage) {
 };
 
 NodeNetworkRpc.prototype.addConnection = function(connection) {
-	this.network.addConnection(connection);
+	this.network.addConnection.apply(this.network, Array.prototype.slice.call(arguments));
 };
 
 module.exports = function(config) {
