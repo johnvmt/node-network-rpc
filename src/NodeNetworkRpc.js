@@ -6,6 +6,7 @@ var Utils = require('./Utils.js');
 
 function NodeNetworkRpc(config) {
 	var rpc = this;
+	rpc.connected = false;
 
 	// TODO seperate configs
 	rpc.network = NodeNetwork(config);
@@ -18,10 +19,14 @@ function NodeNetworkRpc(config) {
 
 	rpc.network.on('address', function(address) {
 		rpc.address = address;
-		if(typeof address == 'undefined')
+		if(typeof address == 'undefined') {
+			rpc.connected = false;
 			rpc.emit('disconnect');
-		else
+		}
+		else {
+			rpc.connected = true;
 			rpc.emit('connect');
+		}
 	});
 
 	['insert', 'remove'].forEach(function(eventType) {
@@ -113,7 +118,6 @@ NodeNetworkRpc.prototype._rpcMessage = function(rpcMessage) {
 		};
 
 		var responseEmitter = function(responseMessage) {
-			// TODO use DNS to get real address
 			// Respond to the src address
 			//console.log(rpcMessage);
 			rpc.network.send(destAddress, responseMessage);
