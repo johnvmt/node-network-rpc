@@ -150,7 +150,7 @@ NodeNetworkRpc.prototype._rpcMessage = function(rpcMessage) {
 				};
 
 				// Send request into the URL router
-				nnrpc.router.route('request', requestMessage.path, {query: requestMessage.query}, packResponse, noRouteHandler);
+				nnrpc.router.route('request', requestMessage.path, requestMessage, packResponse, noRouteHandler);
 			};
 
 			var responseEmitter = function(responseMessage) {
