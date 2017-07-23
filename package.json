@@ -1,6 +1,6 @@
 {
   "name": "node-network-rpc",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Create an RPC system over Node Network",
   "repository": {
     "type": "git",
@@ -14,7 +14,8 @@
     "node-network": "0.1.x",
     "agnostic-rpc":"0.0.x",
     "agnostic-router": "0.1.x",
-    "wolfy87-eventemitter": "5.1.x"
+    "wolfy87-eventemitter": "5.1.x",
+    "queue-emitter": "0.0.x"
   },
   "devDependencies": {
     "browserify": "11.2.x",

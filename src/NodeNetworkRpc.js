@@ -1,5 +1,6 @@
 var Rpc = require('agnostic-rpc');
 var EventEmitter = require('wolfy87-eventemitter');
+var QueueEmitter = require('queue-emitter');
 var AgnosticRouter = require('agnostic-router');
 var NodeNetwork = require('node-network');
 var Utils = require('./Utils.js');
@@ -8,7 +9,9 @@ function NodeNetworkRpc(config) {
 	var rpc = this;
 	rpc.connected = false;
 
-	// TODO seperate configs
+	rpc._queueEmitter = new QueueEmitter();
+
+	// TODO separate configs
 	rpc.network = NodeNetwork(config);
 	rpc.router = AgnosticRouter();
 	rpc._rpc = Rpc();
@@ -44,10 +47,26 @@ function NodeNetworkRpc(config) {
 
 NodeNetworkRpc.prototype.__proto__ = EventEmitter.prototype;
 
+/**
+ * Pass calls to queue emitter
+ */
+NodeNetworkRpc.prototype.queueOn = function() {
+	this._queueEmitter.on.apply(this._queueEmitter, Array.prototype.slice.call(arguments));
+};
+
+/**
+ * Pass calls to queue emitter
+ */
+NodeNetworkRpc.prototype.queueOnce = function() {
+	this._queueEmitter.once.apply(this._queueEmitter, Array.prototype.slice.call(arguments));
+};
+
 NodeNetworkRpc.prototype.request = function() {
 	// TODO queue if no address set?
 
-	if(typeof this.address == 'undefined')
+	var nnrpc = this;
+
+	if(typeof nnrpc.address == 'undefined')
 		throw new Error('NO ADDRESS SET');
 
 	var parsedArgs = Utils.parseArgs(
@@ -62,10 +81,18 @@ NodeNetworkRpc.prototype.request = function() {
 	);
 
 	// Build rpc request message object and set the return address
-	var rpcRequestQuery = {path: parsedArgs.path, query: parsedArgs.query, srcAddress: this.address};
+	var rpcRequest = {
+		query: {
+			path: parsedArgs.path,
+			query: parsedArgs.query,
+			srcAddress: this.address
+		},
+		options: parsedArgs.options
+	};
 
+	// Set response handler
 	if(typeof parsedArgs.callback == 'function') { // Request expects a response
-		var rpcResponseHandler = function(rpcError, rpcResponse) {
+		rpcRequest.responseHandler = function(rpcError, rpcResponse) {
 			if(typeof parsedArgs.callback == 'function') {
 				if(rpcError) // Error in RPC request
 					parsedArgs.callback(rpcError);
@@ -76,54 +103,72 @@ NodeNetworkRpc.prototype.request = function() {
 			}
 		}
 	}
-
 	else // No response expected
-		var rpcResponseHandler = undefined;
+		rpcRequest.responseHandler = undefined;
 
-	var rpcRequestMessage = this._rpc.request(rpcRequestQuery, parsedArgs.options, rpcResponseHandler);
+	// Set destination
+	// TODO add default destination
+	rpcRequest.destAddresses = parsedArgs.destAddresses;
 
-	// Add destination
-	if(typeof parsedArgs.destAddresses != 'string') {} // TODO add default destination
-	var destAddresses = parsedArgs.destAddresses;
-
-	this.network.send(destAddresses, rpcRequestMessage);
+	nnrpc._queueEmitter.emit('outgoingRequest', rpcRequest, function(error) {
+		if(error) {
+			if(typeof rpcRequest.responseHandler == 'function')
+				rpcRequest.responseHandler(error);
+		}
+		else {
+			var rpcRequestMessage = nnrpc._rpc.request(rpcRequest.query, rpcRequest.options, rpcRequest.responseHandler);
+			nnrpc.network.send(rpcRequest.destAddresses, rpcRequestMessage);
+		}
+	});
 };
 
 NodeNetworkRpc.prototype._rpcMessage = function(rpcMessage) {
-	var rpc = this;
-	if(this._rpc.messageIsResponse(rpcMessage)) // incoming response
-		this._rpc.handleResponse(rpcMessage);
+	var nnrpc = this;
+	if(nnrpc._rpc.messageIsResponse(rpcMessage)) { // incoming response
+		nnrpc._queueEmitter.emit('incomingResponse', rpcMessage, function(error) {
+			nnrpc._rpc.handleResponse(rpcMessage);
+		});
+	}
 	else { // incoming request
-		var destAddress = undefined;
+		nnrpc._queueEmitter.emit('incomingRequest', rpcMessage, function(error) {
+			var destAddress = undefined;
 
-		var requestHandler = function(requestMessage, respond) {
+			var requestHandler = function(requestMessage, respond) {
+				destAddress = requestMessage.srcAddress; // return responses to src
 
-			destAddress = requestMessage.srcAddress; // return responses to src
+				// TODO get response address from message, use DNS addresses
 
-			// TODO get response address from message, use DNS addresses
+				var packResponse = function(error, response) {
+					respond({
+						error: error,
+						response: response
+					});
+				};
 
-			var packResponse = function(error, response) {
-				respond({
-					error: error,
-					response: response
+				var noRouteHandler = function() {
+					packResponse('not_found', null);
+				};
+
+				// Send request into the URL router
+				nnrpc.router.route('request', requestMessage.path, {query: requestMessage.query}, packResponse, noRouteHandler);
+			};
+
+			var responseEmitter = function(responseMessage) {
+
+				var rpcResponse = {
+					destAddress: destAddress,
+					message: responseMessage
+				};
+
+				// Respond to the src address
+				nnrpc._queueEmitter.emit('outgoingResponse', rpcResponse, function(error) {
+					if(!error)
+						nnrpc.network.send(rpcResponse.destAddress, rpcResponse.message);
 				});
 			};
 
-			var noRouteHandler = function() {
-				packResponse('not_found', null);
-			};
-
-			// Send request into the URL router
-			rpc.router.route('request', requestMessage.path, {query: requestMessage.query}, packResponse, noRouteHandler);
-		};
-
-		var responseEmitter = function(responseMessage) {
-			// Respond to the src address
-			//console.log(rpcMessage);
-			rpc.network.send(destAddress, responseMessage);
-		};
-
-		this._rpc.handleRequest(rpcMessage, requestHandler, responseEmitter);
+			nnrpc._rpc.handleRequest(rpcMessage, requestHandler, responseEmitter);
+		});
 	}
 };
 
