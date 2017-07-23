@@ -108,7 +108,7 @@ NodeNetworkRpc.prototype.request = function() {
 
 	// Set destination
 	// TODO add default destination
-	rpcRequest.destAddresses = parsedArgs.destAddresses;
+	rpcRequest.destAddresses = nnrpc.network.normalizeAddresses(parsedArgs.destAddresses); // Convert to Array
 
 	nnrpc._queueEmitter.emit('outgoingRequest', rpcRequest, function(error) {
 		if(error) {
