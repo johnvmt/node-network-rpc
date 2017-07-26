@@ -62,64 +62,69 @@ NodeNetworkRpc.prototype.queueOnce = function() {
 };
 
 NodeNetworkRpc.prototype.request = function() {
-	// TODO queue if no address set?
-
 	var nnrpc = this;
 
-	if(typeof nnrpc.address == 'undefined')
-		throw new Error('NO ADDRESS SET');
+	if(typeof nnrpc.address == 'undefined') {
+		// Queue until connected
+		var argsArray = Array.prototype.slice.call(arguments);
+		nnrpc.once('connected', function() {
+			nnrpc.request.apply(nnrpc, argsArray);
+		});
+		console.log("QUEUEING REQUEST");
+	}
+	else {
+		var parsedArgs = Utils.parseArgs(
+			arguments,
+			[
+				{name: 'destAddresses', level: 1,  validate: function(arg, allArgs) { return ((typeof arg == 'string' && arg[0] != '/') || Array.isArray(arg)); }},
+				{name: 'path', level: 0,  validate: function(arg, allArgs) { return typeof arg == 'string' && arg[0] == '/'; }},
+				{name: 'query', level: 1,  validate: function(arg, allArgs) { return typeof arg == 'object'; }, default: {}},
+				{name: 'options', level: 2,  validate: function(arg, allArgs) { return typeof arg == 'object'; }, default: {}},
+				{name: 'callback', level: 1,  validate: function(arg, allArgs) { return typeof(arg) === 'function'; }}
+			]
+		);
 
-	var parsedArgs = Utils.parseArgs(
-		arguments,
-		[
-			{name: 'destAddresses', level: 1,  validate: function(arg, allArgs) { return ((typeof arg == 'string' && arg[0] != '/') || Array.isArray(arg)); }},
-			{name: 'path', level: 0,  validate: function(arg, allArgs) { return typeof arg == 'string' && arg[0] == '/'; }},
-			{name: 'query', level: 1,  validate: function(arg, allArgs) { return typeof arg == 'object'; }, default: {}},
-			{name: 'options', level: 2,  validate: function(arg, allArgs) { return typeof arg == 'object'; }, default: {}},
-			{name: 'callback', level: 1,  validate: function(arg, allArgs) { return typeof(arg) === 'function'; }}
-		]
-	);
+		// Build rpc request message object and set the return address
+		var rpcRequest = {
+			query: {
+				path: parsedArgs.path,
+				query: parsedArgs.query,
+				srcAddress: this.address
+			},
+			options: parsedArgs.options
+		};
 
-	// Build rpc request message object and set the return address
-	var rpcRequest = {
-		query: {
-			path: parsedArgs.path,
-			query: parsedArgs.query,
-			srcAddress: this.address
-		},
-		options: parsedArgs.options
-	};
-
-	// Set response handler
-	if(typeof parsedArgs.callback == 'function') { // Request expects a response
-		rpcRequest.responseHandler = function(rpcError, rpcResponse) {
-			if(typeof parsedArgs.callback == 'function') {
-				if(rpcError) // Error in RPC request
-					parsedArgs.callback(rpcError);
-				else if(typeof rpcResponse != 'object') // Response not of the right type
-					parsedArgs.callback('response_not_object');
-				else // Pass error and response to callback
-					parsedArgs.callback(rpcResponse.error, rpcResponse.response);
+		// Set response handler
+		if(typeof parsedArgs.callback == 'function') { // Request expects a response
+			rpcRequest.responseHandler = function(rpcError, rpcResponse) {
+				if(typeof parsedArgs.callback == 'function') {
+					if(rpcError) // Error in RPC request
+						parsedArgs.callback(rpcError);
+					else if(typeof rpcResponse != 'object') // Response not of the right type
+						parsedArgs.callback('response_not_object');
+					else // Pass error and response to callback
+						parsedArgs.callback(rpcResponse.error, rpcResponse.response);
+				}
 			}
 		}
+		else // No response expected
+			rpcRequest.responseHandler = undefined;
+
+		// Set destination
+		// TODO add default destination
+		rpcRequest.destAddresses = nnrpc.network.normalizeAddresses(parsedArgs.destAddresses); // Convert to Array
+
+		nnrpc._queueEmitter.emit('outgoingRequest', rpcRequest, function(error) {
+			if(error) {
+				if(typeof rpcRequest.responseHandler == 'function')
+					rpcRequest.responseHandler(error);
+			}
+			else {
+				var rpcRequestMessage = nnrpc._rpc.request(rpcRequest.query, rpcRequest.options, rpcRequest.responseHandler);
+				nnrpc.network.send(rpcRequest.destAddresses, rpcRequestMessage);
+			}
+		});
 	}
-	else // No response expected
-		rpcRequest.responseHandler = undefined;
-
-	// Set destination
-	// TODO add default destination
-	rpcRequest.destAddresses = nnrpc.network.normalizeAddresses(parsedArgs.destAddresses); // Convert to Array
-
-	nnrpc._queueEmitter.emit('outgoingRequest', rpcRequest, function(error) {
-		if(error) {
-			if(typeof rpcRequest.responseHandler == 'function')
-				rpcRequest.responseHandler(error);
-		}
-		else {
-			var rpcRequestMessage = nnrpc._rpc.request(rpcRequest.query, rpcRequest.options, rpcRequest.responseHandler);
-			nnrpc.network.send(rpcRequest.destAddresses, rpcRequestMessage);
-		}
-	});
 };
 
 NodeNetworkRpc.prototype._rpcMessage = function(rpcMessage) {
