@@ -67,10 +67,9 @@ NodeNetworkRpc.prototype.request = function() {
 	if(typeof nnrpc.address == 'undefined') {
 		// Queue until connected
 		var argsArray = Array.prototype.slice.call(arguments);
-		nnrpc.once('connected', function() {
+		nnrpc.once('connect', function() {
 			nnrpc.request.apply(nnrpc, argsArray);
 		});
-		console.log("QUEUEING REQUEST");
 	}
 	else {
 		var parsedArgs = Utils.parseArgs(

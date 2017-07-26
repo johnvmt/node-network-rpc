@@ -1,6 +1,6 @@
 {
   "name": "node-network-rpc",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "Create an RPC system over Node Network",
   "authors": [
     "John Murphy-Teixidor <johnvmt@gmail.com>"
